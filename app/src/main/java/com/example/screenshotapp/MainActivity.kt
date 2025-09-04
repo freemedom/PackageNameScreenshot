@@ -34,6 +34,9 @@ class MainActivity : AppCompatActivity() {
     // 本地广播管理器，用于接收截屏服务的广播消息
     private lateinit var localBroadcastManager: LocalBroadcastManager
     
+    // 全局广播接收器（备选方案）
+    private var globalBroadcastReceiver: android.content.BroadcastReceiver? = null
+    
     // 倒计时定时器引用，用于在需要时取消倒计时
     private var countdownTimerRef: android.os.CountDownTimer? = null
     
@@ -258,38 +261,24 @@ class MainActivity : AppCompatActivity() {
      * @param duration 显示时长（毫秒）
      */
     private fun showLongToast(message: String, duration: Long = 3000) {
-        val toast = Toast.makeText(this, message, Toast.LENGTH_LONG)
-        
-        // 使用反射设置显示时长
-        try {
-            val field = toast.javaClass.getDeclaredField("mTN")
-            field.isAccessible = true
-            val tn = field.get(toast)
+        // 确保在UI线程中执行
+        runOnUiThread {
+            Log.d(TAG, "Showing toast: $message")
             
-            val showField = tn.javaClass.getDeclaredField("mShow")
-            showField.isAccessible = true
+            // 简化实现，使用连续显示多个Toast来模拟长时间显示
+            val repeatCount = (duration / 2000).toInt().coerceAtLeast(1)
             
-            val show = showField.get(tn)
-            val showClass = show.javaClass
-            
-            val hideMethod = showClass.getDeclaredMethod("hide")
-            hideMethod.isAccessible = true
-            
-            // 延迟隐藏Toast
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                try {
-                    hideMethod.invoke(show)
-                } catch (e: Exception) {
-                    // 忽略异常
-                }
-            }, duration)
-            
-        } catch (e: Exception) {
-            // 如果反射失败，使用默认的LENGTH_LONG
-            Log.w(TAG, "Failed to set custom toast duration, using default")
+            repeat(repeatCount) { index ->
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    try {
+                        Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+                        Log.d(TAG, "Toast displayed: $message (${index + 1}/$repeatCount)")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to show toast", e)
+                    }
+                }, index * 2000L)
+            }
         }
-        
-        toast.show()
     }
     
     /**
@@ -311,7 +300,7 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onResume() {
         super.onResume()
-        // registerScreenshotReceiver()
+        registerScreenshotReceiver()  // 注释掉还是不行
     }
     
     /**
@@ -320,7 +309,7 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onPause() {
         super.onPause()
-        // unregisterScreenshotReceiver()
+        unregisterScreenshotReceiver()
     }
     
     /**
@@ -338,8 +327,32 @@ class MainActivity : AppCompatActivity() {
      * 监听截屏服务发送的结果消息
      */
     private fun registerScreenshotReceiver() {
+        Log.d(TAG, "registerScreenshotReceiver: 注册广播接收器")
+        
+        // 注册本地广播接收器（推荐方式，更安全且无版本限制）
         val filter = IntentFilter("com.example.screenshotapp.SCREENSHOT_RESULT")
         localBroadcastManager.registerReceiver(screenshotResultReceiver, filter)
+        Log.d(TAG, "registerScreenshotReceiver: 本地广播接收器注册完成")
+        
+        // 如果需要全局广播作为备选方案，按Android版本处理
+        try {
+            globalBroadcastReceiver = screenshotResultReceiver
+            val globalFilter = IntentFilter("com.example.screenshotapp.SCREENSHOT_RESULT")
+            
+            // Android 13+ (API 33+) 要求明确指定接收器是否导出
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // RECEIVER_NOT_EXPORTED: 不导出，只接收应用内部广播
+                registerReceiver(globalBroadcastReceiver, globalFilter, Context.RECEIVER_NOT_EXPORTED)
+                Log.d(TAG, "registerScreenshotReceiver: Android 13+ 全局广播接收器注册完成")
+            } else {
+                // Android 12及以下版本使用旧方法
+                registerReceiver(globalBroadcastReceiver, globalFilter)
+                Log.d(TAG, "registerScreenshotReceiver: Android 12- 全局广播接收器注册完成")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "registerScreenshotReceiver: 全局广播接收器注册失败，将只使用本地广播", e)
+            globalBroadcastReceiver = null
+        }
     }
     
     /**
@@ -347,11 +360,29 @@ class MainActivity : AppCompatActivity() {
      * 防止内存泄漏
      */
     private fun unregisterScreenshotReceiver() {
+        Log.d(TAG, "unregisterScreenshotReceiver: 开始注销广播接收器")
+        
+        // 注销本地广播接收器
         try {
             localBroadcastManager.unregisterReceiver(screenshotResultReceiver)
+            Log.d(TAG, "unregisterScreenshotReceiver: 本地广播接收器注销完成")
         } catch (e: Exception) {
-            // 接收器可能已经注销，忽略异常
+            Log.w(TAG, "unregisterScreenshotReceiver: 本地广播接收器注销失败", e)
         }
+        
+        // 注销全局广播接收器
+        try {
+            globalBroadcastReceiver?.let { receiver ->
+                unregisterReceiver(receiver)
+                globalBroadcastReceiver = null
+                Log.d(TAG, "unregisterScreenshotReceiver: 全局广播接收器注销完成")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "unregisterScreenshotReceiver: 全局广播接收器注销失败", e)
+            globalBroadcastReceiver = null // 确保清理引用
+        }
+        
+        Log.d(TAG, "unregisterScreenshotReceiver: 广播接收器注销流程完成")
     }
     
     /**
@@ -360,28 +391,36 @@ class MainActivity : AppCompatActivity() {
      */
     private val screenshotResultReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d(TAG, "screenshotResultReceiver: intent = $intent")
+            Log.d(TAG, "screenshotResultReceiver: 收到广播 - intent = $intent")
             // 从广播Intent中获取结果数据
             val success = intent?.getBooleanExtra("success", false) ?: false
             val fileName = intent?.getStringExtra("fileName")
             val error = intent?.getStringExtra("error")
             
+            Log.d(TAG, "screenshotResultReceiver: success=$success, fileName=$fileName, error=$error")
+            
             // 根据截屏结果更新UI和显示相应提示
             when {
                 success && fileName != null -> {
                     // 截屏成功，显示文件名和成功提示
-                    updateStatus("截图已保存: $fileName")
-                    showLongToast("截图已保存: $fileName", 5000) // 显示5秒
+                    val message = "截图已保存: $fileName"
+                    Log.d(TAG, "screenshotResultReceiver: 截屏成功 - $message")
+                    updateStatus(message)
+                    showLongToast(message, 5000) // 显示5秒
                 }
                 error == "secure_content" -> {
                     // 遇到安全内容（FLAG_SECURE），显示相应提示
-                    updateStatus("当前页面不支持截屏")
-                    showLongToast("当前页面不支持截屏", 4000) // 显示4秒
+                    val message = "当前页面不支持截屏"
+                    Log.d(TAG, "screenshotResultReceiver: 安全内容 - $message")
+                    updateStatus(message)
+                    showLongToast(message, 4000) // 显示4秒
                 }
                 else -> {
                     // 其他错误情况，显示失败提示
-                    updateStatus("截屏失败")
-                    showLongToast("截屏失败", 4000) // 显示4秒
+                    val message = "截屏失败${if (error != null) ": $error" else ""}"
+                    Log.d(TAG, "screenshotResultReceiver: 截屏失败 - $message")
+                    updateStatus(message)
+                    showLongToast(message, 4000) // 显示4秒
                 }
             }
         }

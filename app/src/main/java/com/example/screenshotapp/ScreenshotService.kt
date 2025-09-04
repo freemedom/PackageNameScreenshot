@@ -151,11 +151,22 @@ class ScreenshotService : Service() {
                     // 保存截图
                     val success = saveScreenshot(bitmap, fileName)
                     
-                    // 发送结果广播
+                    // 发送结果广播（本地广播和全局广播都发送）
                     val resultIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
                     resultIntent.putExtra("success", success)
                     resultIntent.putExtra("fileName", fileName)
+                    Log.d(TAG, "发送截屏成功广播: action=${resultIntent.action}, success=$success, fileName=$fileName")
+                    
+                    // 发送本地广播
                     LocalBroadcastManager.getInstance(this).sendBroadcast(resultIntent)
+                    
+                    // 发送全局广播（备选方案）
+                    val globalIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
+                    globalIntent.putExtra("success", success)
+                    globalIntent.putExtra("fileName", fileName)
+                    globalIntent.setPackage(packageName) // 限制只发送给自己的应用
+                    sendBroadcast(globalIntent)
+                    Log.d(TAG, "同时发送全局广播作为备选方案")
                     
                     Log.d(TAG, "Screenshot saved: $fileName, success: $success")
                 } else {
@@ -163,7 +174,17 @@ class ScreenshotService : Service() {
                     val resultIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
                     resultIntent.putExtra("success", false)
                     resultIntent.putExtra("error", "secure_content")
+                    Log.d(TAG, "发送安全内容广播: action=${resultIntent.action}")
+                    
+                    // 发送本地广播
                     LocalBroadcastManager.getInstance(this).sendBroadcast(resultIntent)
+                    
+                    // 发送全局广播（备选方案）
+                    val globalIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
+                    globalIntent.putExtra("success", false)
+                    globalIntent.putExtra("error", "secure_content")
+                    globalIntent.setPackage(packageName)
+                    sendBroadcast(globalIntent)
                 }
             }
             
@@ -172,7 +193,17 @@ class ScreenshotService : Service() {
             val resultIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
             resultIntent.putExtra("success", false)
             resultIntent.putExtra("error", e.message)
+            Log.d(TAG, "发送错误广播: action=${resultIntent.action}, error=${e.message}")
+            
+            // 发送本地广播
             LocalBroadcastManager.getInstance(this).sendBroadcast(resultIntent)
+            
+            // 发送全局广播（备选方案）
+            val globalIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
+            globalIntent.putExtra("success", false)
+            globalIntent.putExtra("error", e.message)
+            globalIntent.setPackage(packageName)
+            sendBroadcast(globalIntent)
         } finally {
             cleanup()
             stopSelf()
