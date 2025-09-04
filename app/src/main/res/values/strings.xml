@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">截屏助手</string>
+    <string name="take_screenshot">截屏</string>
+    <string name="permission_usage_stats_title">需要使用情况访问权限</string>
+    <string name="permission_usage_stats_message">为了获取当前前台应用的包名，需要授予使用情况访问权限。\n\n请点击"确定"前往设置页面开启权限。</string>
+    <string name="permission_usage_stats_denied">使用情况访问权限被拒绝，将使用默认命名</string>
+    <string name="screenshot_success">截图已保存</string>
+    <string name="screenshot_failed">截图失败</string>
+    <string name="screenshot_secure_content">当前页面不支持截屏（安全内容）</string>
+    <string name="screenshot_service_notification_title">正在截屏</string>
+    <string name="screenshot_service_notification_content">截屏服务正在运行</string>
+    <string name="ok">确定</string>
+    <string name="cancel">取消</string>
+</resources>
