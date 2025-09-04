@@ -43,6 +43,9 @@ class ScreenshotService : Service() {
         super.onCreate()
         createNotificationChannel()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        
+        // 初始化结果管理器（用于后台通信）
+        ScreenshotResultManager.initialize(this) { /* 服务端不需要回调 */ }
     }
     
     /**
@@ -151,7 +154,16 @@ class ScreenshotService : Service() {
                     // 保存截图
                     val success = saveScreenshot(bitmap, fileName)
                     
-                    // 发送结果广播（本地广播和全局广播都发送）
+                    // 使用新的结果管理器（主要解决方案，解决后台广播限制问题）
+                    val result = ScreenshotResultManager.ScreenshotResult(
+                        success = success,
+                        fileName = fileName,
+                        error = null
+                    )
+                    ScreenshotResultManager.saveResult(result)
+                    Log.d(TAG, "使用ScreenshotResultManager保存结果: $result")
+                    
+                    // 发送结果广播（作为备选方案保留）
                     val resultIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
                     resultIntent.putExtra("success", success)
                     resultIntent.putExtra("fileName", fileName)
@@ -171,6 +183,14 @@ class ScreenshotService : Service() {
                     Log.d(TAG, "Screenshot saved: $fileName, success: $success")
                 } else {
                     // 可能是安全内容（FLAG_SECURE）
+                    val result = ScreenshotResultManager.ScreenshotResult(
+                        success = false,
+                        fileName = null,
+                        error = "secure_content"
+                    )
+                    ScreenshotResultManager.saveResult(result)
+                    Log.d(TAG, "使用ScreenshotResultManager保存安全内容错误: $result")
+                    
                     val resultIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
                     resultIntent.putExtra("success", false)
                     resultIntent.putExtra("error", "secure_content")
@@ -190,6 +210,16 @@ class ScreenshotService : Service() {
             
         } catch (e: Exception) {
             Log.e(TAG, "Screenshot failed", e)
+            
+            // 使用结果管理器保存错误信息
+            val result = ScreenshotResultManager.ScreenshotResult(
+                success = false,
+                fileName = null,
+                error = e.message
+            )
+            ScreenshotResultManager.saveResult(result)
+            Log.d(TAG, "使用ScreenshotResultManager保存错误: $result")
+            
             val resultIntent = Intent("com.example.screenshotapp.SCREENSHOT_RESULT")
             resultIntent.putExtra("success", false)
             resultIntent.putExtra("error", e.message)

@@ -73,6 +73,11 @@ class MainActivity : AppCompatActivity() {
         // 获取本地广播管理器实例，用于接收截屏服务的广播消息
         localBroadcastManager = LocalBroadcastManager.getInstance(this)
         
+        // 初始化截屏结果管理器（解决后台广播限制问题）
+        ScreenshotResultManager.initialize(this) { result ->
+            handleScreenshotResult(result)
+        }
+        
         // 设置用户界面（按钮点击事件等）
         setupUI()
         
@@ -90,6 +95,41 @@ class MainActivity : AppCompatActivity() {
             // 先检查使用情况访问权限，如果已授权则开始倒计时截屏
             if (checkUsageStatsPermission()) {
                 startCountdownScreenshot()
+            }
+        }
+    }
+    
+    /**
+     * 处理截屏结果（通过SharedPreferences接收）
+     * 解决后台广播限制问题
+     */
+    private fun handleScreenshotResult(result: ScreenshotResultManager.ScreenshotResult) {
+        Log.d(TAG, "handleScreenshotResult: 收到截屏结果 - $result")
+        
+        // 确保在UI线程中更新界面
+        runOnUiThread {
+            when {
+                result.success && result.fileName != null -> {
+                    // 截屏成功，显示文件名和成功提示
+                    val message = "截图已保存: ${result.fileName}"
+                    Log.d(TAG, "handleScreenshotResult: 截屏成功 - $message")
+                    updateStatus(message)
+                    showLongToast(message, 5000) // 显示5秒
+                }
+                result.error == "secure_content" -> {
+                    // 遇到安全内容（FLAG_SECURE），显示相应提示
+                    val message = "当前页面不支持截屏"
+                    Log.d(TAG, "handleScreenshotResult: 安全内容 - $message")
+                    updateStatus(message)
+                    showLongToast(message, 4000) // 显示4秒
+                }
+                else -> {
+                    // 其他错误情况，显示失败提示
+                    val message = "截屏失败${if (result.error != null) ": ${result.error}" else ""}"
+                    Log.d(TAG, "handleScreenshotResult: 截屏失败 - $message")
+                    updateStatus(message)
+                    showLongToast(message, 4000) // 显示4秒
+                }
             }
         }
     }
@@ -300,7 +340,11 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onResume() {
         super.onResume()
-        registerScreenshotReceiver()  // 注释掉还是不行
+        registerScreenshotReceiver()  // 保留广播作为备选方案
+        
+        // 开始监听截屏结果（主要解决方案）
+        ScreenshotResultManager.startListening()
+        Log.d(TAG, "onResume: 开始监听截屏结果")
     }
     
     /**
@@ -310,6 +354,10 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         unregisterScreenshotReceiver()
+        
+        // 注意：不在onPause中停止监听，因为应用可能在后台继续截屏
+        // ScreenshotResultManager.stopListening()
+        Log.d(TAG, "onPause: 保持后台监听状态")
     }
     
     /**
@@ -320,6 +368,10 @@ class MainActivity : AppCompatActivity() {
         // 取消倒计时定时器
         countdownTimerRef?.cancel()
         countdownTimerRef = null
+        
+        // 停止监听截屏结果
+        ScreenshotResultManager.stopListening()
+        Log.d(TAG, "onDestroy: 停止监听截屏结果")
     }
     
     /**
