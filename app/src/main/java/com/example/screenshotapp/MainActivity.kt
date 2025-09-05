@@ -342,6 +342,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         registerScreenshotReceiver()  // 保留广播作为备选方案
         
+        // 设置应用为前台状态
+        ScreenshotResultManager.setAppForegroundState(true)
+        
         // 开始监听截屏结果（主要解决方案）
         ScreenshotResultManager.startListening()
         Log.d(TAG, "onResume: 开始监听截屏结果")
@@ -355,9 +358,12 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         unregisterScreenshotReceiver()
         
+        // 设置应用为后台状态
+        ScreenshotResultManager.setAppForegroundState(false)
+        
         // 注意：不在onPause中停止监听，因为应用可能在后台继续截屏
         // ScreenshotResultManager.stopListening()
-        Log.d(TAG, "onPause: 保持后台监听状态")
+        Log.d(TAG, "onPause: 保持后台监听状态，切换到通知模式")
     }
     
     /**
@@ -443,6 +449,7 @@ class MainActivity : AppCompatActivity() {
      */
     private val screenshotResultReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            // 好吧 后台不显示的关键问题应该是收不到广播，而不是Toast的问题
             Log.d(TAG, "screenshotResultReceiver: 收到广播 - intent = $intent")
             // 从广播Intent中获取结果数据
             val success = intent?.getBooleanExtra("success", false) ?: false

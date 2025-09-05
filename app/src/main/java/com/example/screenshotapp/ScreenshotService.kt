@@ -27,7 +27,7 @@ class ScreenshotService : Service() {
     companion object {
         private const val TAG = "ScreenshotService"
         private const val NOTIFICATION_ID = 1001
-        private const val CHANNEL_ID = "screenshot_channel"
+        private const val CHANNEL_ID = "screenshot_channel" // 1
         
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_DATA = "data"
