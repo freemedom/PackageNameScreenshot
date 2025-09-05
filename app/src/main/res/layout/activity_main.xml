@@ -25,7 +25,7 @@
         android:id="@+id/descriptionText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="点击下方按钮进行截屏，截图将自动包含当前前台应用的包名"
+        android:text="点击下方按钮进行截屏，截图将自动包含当前前台应用的包名，注意打开悬浮通知权限"
         android:textAlignment="center"
         android:textSize="16sp"
         android:layout_marginBottom="48dp"
